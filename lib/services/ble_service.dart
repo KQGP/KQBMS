@@ -34,6 +34,7 @@ class BleService {
   Stream<void> get disconnectStream => _disconnectController.stream;
 
   Future<bool> requestPermissions() async {
+    if (kIsWeb) return true;
     final scanStatus = await Permission.bluetoothScan.status;
     final connectStatus = await Permission.bluetoothConnect.status;
     final locationStatus = await Permission.location.status;
@@ -61,6 +62,7 @@ class BleService {
   }
 
   Future<void> ensureBluetoothOn() async {
+    if (kIsWeb) return;
     try {
       final state = await FlutterBluePlus.adapterState.first;
       if (state == BluetoothAdapterState.on) return;
@@ -78,22 +80,24 @@ class BleService {
 
   Future<void> startScan() async {
     try {
-      final scanStatus = await Permission.bluetoothScan.status;
-      final connectStatus = await Permission.bluetoothConnect.status;
-      if (!scanStatus.isGranted || !connectStatus.isGranted) {
-        final granted = await requestPermissions();
-        if (!granted) return;
+      if (!kIsWeb) {
+        final scanStatus = await Permission.bluetoothScan.status;
+        final connectStatus = await Permission.bluetoothConnect.status;
+        if (!scanStatus.isGranted || !connectStatus.isGranted) {
+          final granted = await requestPermissions();
+          if (!granted) return;
+        }
+
+        await ensureBluetoothOn();
+
+        await FlutterBluePlus.adapterState
+            .where((s) => s != BluetoothAdapterState.unknown)
+            .first
+            .timeout(
+              const Duration(seconds: 2),
+              onTimeout: () => BluetoothAdapterState.on,
+            );
       }
-
-      await ensureBluetoothOn();
-
-      await FlutterBluePlus.adapterState
-          .where((s) => s != BluetoothAdapterState.unknown)
-          .first
-          .timeout(
-            const Duration(seconds: 2),
-            onTimeout: () => BluetoothAdapterState.on,
-          );
 
       await FlutterBluePlus.startScan(
         withServices: [Guid(serviceUuid)],

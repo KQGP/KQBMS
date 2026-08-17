@@ -77,6 +77,7 @@ class BmsProvider extends ChangeNotifier {
   Future<void> enableBluetooth() => _bleService.ensureBluetoothOn();
 
   Future<bool> autoConnect(String deviceId) async {
+    if (kIsWeb) return false;
     try {
       await _bleService.ensureBluetoothOn();
       
