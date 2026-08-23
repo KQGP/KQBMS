@@ -301,4 +301,47 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get noReading => 'no reading';
+
+  @override
+  String get bluetooth => 'Bluetooth';
+
+  @override
+  String get wifi => 'WiFi';
+
+  @override
+  String get wifiBridge => 'KQBMS WiFi Bridge';
+
+  @override
+  String get wifiBridgeSubtitle =>
+      'Connect to your BMS through the ESP32 bridge';
+
+  @override
+  String get bridgeAddress => 'Bridge Address';
+
+  @override
+  String get bridgeAddressHint => 'kqbms-bridge.local or IP';
+
+  @override
+  String get portLabel => 'Port';
+
+  @override
+  String get autoDiscover => 'Auto Discover';
+
+  @override
+  String get bridgeFound => 'Bridge found';
+
+  @override
+  String get bridgeNotFound => 'Bridge not found on this network';
+
+  @override
+  String get connect => 'Connect';
+
+  @override
+  String get connecting => 'Connecting...';
+
+  @override
+  String get connectionFailed => 'Connection failed';
+
+  @override
+  String get enterBridgeAddress => 'Enter the bridge address';
 }

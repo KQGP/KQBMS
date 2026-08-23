@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 class BmsMalfunction {
   final String token;
   final String? source;
@@ -42,7 +40,6 @@ class BmsBaseInfo {
   final double? learnCapacity;
   final double? balanceCurrent;
   final bool hasExtended;
-  final String cachedDataHex;
 
   BmsBaseInfo({
     required this.totalVoltage,
@@ -64,36 +61,7 @@ class BmsBaseInfo {
     this.learnCapacity,
     this.balanceCurrent,
     this.hasExtended = false,
-    this.cachedDataHex = '',
   });
-
-  BmsBaseInfo copyWith({
-    bool? isCharging,
-    bool? isDischarging,
-  }) {
-    return BmsBaseInfo(
-      totalVoltage: totalVoltage,
-      current: current,
-      remainingCapacity: remainingCapacity,
-      nominalCapacity: nominalCapacity,
-      cycleCount: cycleCount,
-      rsoc: rsoc,
-      temperatures: temperatures,
-      isCharging: isCharging ?? this.isCharging,
-      isDischarging: isDischarging ?? this.isDischarging,
-      protectionState: protectionState,
-      softwareVersion: softwareVersion,
-      cellCount: cellCount,
-      ntcCount: ntcCount,
-      productionDate: productionDate,
-      balanceLow: balanceLow,
-      balanceHigh: balanceHigh,
-      learnCapacity: learnCapacity,
-      balanceCurrent: balanceCurrent,
-      hasExtended: hasExtended,
-      cachedDataHex: cachedDataHex,
-    );
-  }
 
   List<bool> get balanceBits {
     final bits = <bool>[];
@@ -216,8 +184,6 @@ class BmsBaseInfo {
       }
     }
 
-    final hex = data.map((b) => b.toRadixString(16).padLeft(2, '0').toUpperCase()).join(' ');
-
     return BmsBaseInfo(
       totalVoltage: totalVoltage,
       current: current,
@@ -238,7 +204,6 @@ class BmsBaseInfo {
       learnCapacity: learnCapacity,
       balanceCurrent: balanceCurrent,
       hasExtended: hasExtended,
-      cachedDataHex: hex,
     );
   }
 }
@@ -364,29 +329,6 @@ class BmsDeviceInfo {
 
   factory BmsDeviceInfo.fromBatteryModelBytes(List<int> data) {
     return BmsDeviceInfo(batteryModel: _decodeGb2312(data));
-  }
-
-  factory BmsDeviceInfo.fromExtendedParamsRatings(List<int> data) {
-    double ratedCharge = 0, ratedDischarge = 0, ratedPower = 0;
-    if (data.length >= 8) {
-      ratedDischarge = ((data[2] << 8) | data[3]) / 100.0;
-      ratedCharge = ((data[4] << 8) | data[5]) / 100.0;
-      ratedPower = ((data[6] << 8) | data[7]) / 100.0;
-    }
-    return BmsDeviceInfo(
-      ratedChargeCurrent: ratedCharge,
-      ratedDischargeCurrent: ratedDischarge,
-      ratedDischargePower: ratedPower,
-    );
-  }
-
-  factory BmsDeviceInfo.fromExtendedParamsAddress(List<int> data) {
-    String addr = data.take(4).map((b) => b.toRadixString(16).padLeft(2, '0').toUpperCase()).join(':');
-    return BmsDeviceInfo(bmsAddress: addr);
-  }
-
-  factory BmsDeviceInfo.fromExtendedParamsModel(List<int> data) {
-    return BmsDeviceInfo(bmsModel: _decodeGb2312(data));
   }
 
   static String _decodeGb2312(List<int> bytes) {

@@ -4,6 +4,7 @@ import '../../l10n/app_localizations.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import '../../providers/bms_provider.dart';
+import '../../providers/settings_provider.dart';
 import '../theme.dart';
 import '../widgets/glass_container.dart';
 import 'dashboard_screen.dart';
@@ -20,6 +21,14 @@ class _ScanScreenState extends State<ScanScreen>
   late AnimationController _fadeController;
   late Animation<double> _fadeAnim;
 
+  String _mode = 'ble';
+  final TextEditingController _hostController = TextEditingController();
+  final TextEditingController _portController = TextEditingController();
+  bool _connecting = false;
+  bool _discovering = false;
+
+  bool get _isBle => _mode == 'ble';
+
   @override
   void initState() {
     super.initState();
@@ -33,15 +42,98 @@ class _ScanScreenState extends State<ScanScreen>
     _fadeController.forward();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<BmsProvider>().startScan();
+      final settings = context.read<SettingsProvider>();
+      setState(() {
+        _mode = settings.transportMode == 'wifi' ? 'wifi' : 'ble';
+        _hostController.text = settings.wifiHost;
+        _portController.text = settings.wifiPort.toString();
+      });
+      if (_isBle) {
+        context.read<BmsProvider>().startScan();
+      }
     });
   }
 
   @override
   void dispose() {
     _fadeController.dispose();
+    _hostController.dispose();
+    _portController.dispose();
     super.dispose();
   }
+
+  void _switchMode(String mode) {
+    if (_mode == mode || _connecting || _discovering) return;
+    final provider = context.read<BmsProvider>();
+    provider.stopScan();
+    context.read<SettingsProvider>().setTransportMode(mode);
+    setState(() => _mode = mode);
+    if (mode == 'ble') {
+      provider.startScan();
+    }
+  }
+
+  Future<void> _discoverBridge() async {
+    FocusScope.of(context).unfocus();
+    final provider = context.read<BmsProvider>();
+    setState(() => _discovering = true);
+    try {
+      final found = await provider.discoverBridge();
+      if (!mounted) return;
+      if (found != null) {
+        setState(() {
+          _hostController.text = found.key;
+          _portController.text = found.value.toString();
+        });
+        _showSnack(_l10n.bridgeFound, success: true);
+      } else {
+        _showSnack(_l10n.bridgeNotFound, success: false);
+      }
+    } finally {
+      if (mounted) setState(() => _discovering = false);
+    }
+  }
+
+  Future<void> _connectWifi() async {
+    FocusScope.of(context).unfocus();
+    final host = _hostController.text.trim();
+    if (host.isEmpty) {
+      _showSnack(_l10n.enterBridgeAddress, success: false);
+      return;
+    }
+    final port = int.tryParse(_portController.text.trim()) ?? 3333;
+
+    final provider = context.read<BmsProvider>();
+    setState(() => _connecting = true);
+    try {
+      await provider.connectToWifi(host: host, port: port);
+      if (!mounted) return;
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const DashboardScreen()),
+      );
+    } catch (e) {
+      if (mounted) {
+        _showSnack(_l10n.connectionFailed, success: false);
+      }
+    } finally {
+      if (mounted) setState(() => _connecting = false);
+    }
+  }
+
+  void _showSnack(String message, {required bool success}) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: success
+            ? AppTheme.getSuccess(context)
+            : AppTheme.getError(context),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  AppLocalizations get _l10n => AppLocalizations.of(context)!;
 
   @override
   Widget build(BuildContext context) {
@@ -78,7 +170,7 @@ class _ScanScreenState extends State<ScanScreen>
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Padding(
-                    padding: const EdgeInsets.only(top: 12, bottom: 24),
+                    padding: const EdgeInsets.only(top: 12, bottom: 16),
                     child: Row(
                       children: [
                         Expanded(
@@ -101,43 +193,266 @@ class _ScanScreenState extends State<ScanScreen>
                             ],
                           ),
                         ),
-                        _buildScanButton(context, l10n),
+                        if (_isBle) _buildScanButton(context, l10n),
                       ],
                     ),
                   ),
 
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 16),
+                    child: _buildModeToggle(context, l10n),
+                  ),
+
                   Expanded(
-                    child: Consumer<BmsProvider>(
-                      builder: (context, provider, child) {
-                        if (provider.scanResults.isEmpty &&
-                            provider.isScanning) {
-                          return _buildSearchingState(context, l10n);
-                        }
-                        if (provider.scanResults.isEmpty) {
-                          return _buildEmptyState(context, provider, l10n);
-                        }
-                        return FadeTransition(
-                          opacity: _fadeAnim,
-                          child: ListView.builder(
-                            itemCount: provider.scanResults.length,
-                            itemBuilder: (context, index) {
-                              return _buildDeviceCard(
-                                context,
-                                provider,
-                                provider.scanResults[index],
-                                l10n,
-                              );
-                            },
-                          ),
-                        );
-                      },
-                    ),
+                    child: _isBle
+                        ? _buildBluetoothPane(l10n)
+                        : _buildWifiPane(context, l10n),
                   ),
                 ],
               ),
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildModeToggle(BuildContext context, AppLocalizations l10n) {
+    return SegmentedButton<String>(
+      segments: [
+        ButtonSegment(
+          value: 'ble',
+          icon: Icon(Icons.bluetooth_rounded, size: 18),
+          label: Text(l10n.bluetooth),
+        ),
+        ButtonSegment(
+          value: 'wifi',
+          icon: Icon(Icons.wifi_rounded, size: 18),
+          label: Text(l10n.wifi),
+        ),
+      ],
+      selected: {_mode},
+      onSelectionChanged: (selection) => _switchMode(selection.first),
+      showSelectedIcon: false,
+      style: SegmentedButton.styleFrom(
+        selectedBackgroundColor:
+            AppTheme.getPrimary(context).withValues(alpha: 0.15),
+        selectedForegroundColor: AppTheme.getPrimary(context),
+        foregroundColor: AppTheme.getTextTertiary(context),
+        side: BorderSide(color: AppTheme.getGlassBorder(context)),
+      ),
+    );
+  }
+
+  Widget _buildBluetoothPane(AppLocalizations l10n) {
+    return Consumer<BmsProvider>(
+      builder: (context, provider, child) {
+        if (provider.scanResults.isEmpty && provider.isScanning) {
+          return _buildSearchingState(context, l10n);
+        }
+        if (provider.scanResults.isEmpty) {
+          return _buildEmptyState(context, provider, l10n);
+        }
+        return FadeTransition(
+          opacity: _fadeAnim,
+          child: ListView.builder(
+            itemCount: provider.scanResults.length,
+            itemBuilder: (context, index) {
+              return _buildDeviceCard(
+                context,
+                provider,
+                provider.scanResults[index],
+                l10n,
+              );
+            },
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildWifiPane(BuildContext context, AppLocalizations l10n) {
+    return ListView(
+      children: [
+        GlassContainer(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: AppTheme.getPrimary(context).withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(
+                      Icons.router_rounded,
+                      size: 22,
+                      color: AppTheme.getPrimary(context),
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          l10n.wifiBridge,
+                          style: AppTheme.headlineStyle(context),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          l10n.wifiBridgeSubtitle,
+                          style: AppTheme.labelStyle(context).copyWith(
+                            fontSize: 12,
+                            color: AppTheme.getTextTertiary(context),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+
+              TextField(
+                controller: _hostController,
+                keyboardType: TextInputType.url,
+                enabled: !_connecting,
+                textInputAction: TextInputAction.next,
+                style: TextStyle(color: AppTheme.getTextPrimary(context)),
+                decoration: _inputDecoration(
+                  context,
+                  l10n.bridgeAddress,
+                  l10n.bridgeAddressHint,
+                  Icons.dns_rounded,
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _portController,
+                keyboardType: TextInputType.number,
+                enabled: !_connecting,
+                style: TextStyle(color: AppTheme.getTextPrimary(context)),
+                decoration: _inputDecoration(
+                  context,
+                  l10n.portLabel,
+                  '3333',
+                  Icons.settings_ethernet_rounded,
+                ),
+              ),
+              const SizedBox(height: 20),
+
+              Row(
+                children: [
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: _connecting || _discovering ? null : _discoverBridge,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 13),
+                        decoration: BoxDecoration(
+                          color: AppTheme.getGlassColor(context),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                            color: AppTheme.getGlassBorder(context),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            _discovering
+                                ? SizedBox(
+                                    width: 15,
+                                    height: 15,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 1.8,
+                                      color: AppTheme.getPrimary(context),
+                                    ),
+                                  )
+                                : Icon(
+                                    Icons.travel_explore_rounded,
+                                    size: 17,
+                                    color: AppTheme.getPrimary(context),
+                                  ),
+                            const SizedBox(width: 8),
+                            Text(
+                              l10n.autoDiscover,
+                              style: AppTheme.bodyStyle(context).copyWith(
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+
+              GestureDetector(
+                onTap: _connecting || _discovering ? null : _connectWifi,
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  decoration: BoxDecoration(
+                    color: AppTheme.getPrimary(context),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      _connecting
+                          ? SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 1.8,
+                                color: Colors.white,
+                              ),
+                            )
+                          : Icon(Icons.wifi_rounded,
+                              size: 18, color: Colors.white),
+                      const SizedBox(width: 8),
+                      Text(
+                        _connecting ? l10n.connecting : l10n.connect,
+                        style: AppTheme.bodyStyle(context).copyWith(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  InputDecoration _inputDecoration(
+    BuildContext context,
+    String label,
+    String hint,
+    IconData icon,
+  ) {
+    return InputDecoration(
+      labelText: label,
+      hintText: hint,
+      prefixIcon: Icon(icon, size: 19, color: AppTheme.getTextTertiary(context)),
+      labelStyle: TextStyle(color: AppTheme.getTextSecondary(context)),
+      hintStyle: TextStyle(color: AppTheme.getTextTertiary(context)),
+      filled: true,
+      fillColor: AppTheme.getGlassColor(context),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: BorderSide.none,
       ),
     );
   }

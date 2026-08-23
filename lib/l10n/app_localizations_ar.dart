@@ -300,4 +300,46 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get noReading => 'لا توجد قراءة';
+
+  @override
+  String get bluetooth => 'بلوتوث';
+
+  @override
+  String get wifi => 'واي فاي';
+
+  @override
+  String get wifiBridge => 'جسر KQBMS اللاسلكي';
+
+  @override
+  String get wifiBridgeSubtitle => 'اتصل بنظام البطارية عبر جسر ESP32';
+
+  @override
+  String get bridgeAddress => 'عنوان الجسر';
+
+  @override
+  String get bridgeAddressHint => 'kqbms-bridge.local أو عنوان IP';
+
+  @override
+  String get portLabel => 'المنفذ';
+
+  @override
+  String get autoDiscover => 'بحث تلقائي';
+
+  @override
+  String get bridgeFound => 'تم العثور على الجسر';
+
+  @override
+  String get bridgeNotFound => 'لم يتم العثور على الجسر في هذه الشبكة';
+
+  @override
+  String get connect => 'اتصال';
+
+  @override
+  String get connecting => 'جارٍ الاتصال...';
+
+  @override
+  String get connectionFailed => 'فشل الاتصال';
+
+  @override
+  String get enterBridgeAddress => 'أدخل عنوان الجسر';
 }

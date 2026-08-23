@@ -679,6 +679,90 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'no reading'**
   String get noReading;
+
+  /// No description provided for @bluetooth.
+  ///
+  /// In en, this message translates to:
+  /// **'Bluetooth'**
+  String get bluetooth;
+
+  /// No description provided for @wifi.
+  ///
+  /// In en, this message translates to:
+  /// **'WiFi'**
+  String get wifi;
+
+  /// No description provided for @wifiBridge.
+  ///
+  /// In en, this message translates to:
+  /// **'KQBMS WiFi Bridge'**
+  String get wifiBridge;
+
+  /// No description provided for @wifiBridgeSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Connect to your BMS through the ESP32 bridge'**
+  String get wifiBridgeSubtitle;
+
+  /// No description provided for @bridgeAddress.
+  ///
+  /// In en, this message translates to:
+  /// **'Bridge Address'**
+  String get bridgeAddress;
+
+  /// No description provided for @bridgeAddressHint.
+  ///
+  /// In en, this message translates to:
+  /// **'kqbms-bridge.local or IP'**
+  String get bridgeAddressHint;
+
+  /// No description provided for @portLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Port'**
+  String get portLabel;
+
+  /// No description provided for @autoDiscover.
+  ///
+  /// In en, this message translates to:
+  /// **'Auto Discover'**
+  String get autoDiscover;
+
+  /// No description provided for @bridgeFound.
+  ///
+  /// In en, this message translates to:
+  /// **'Bridge found'**
+  String get bridgeFound;
+
+  /// No description provided for @bridgeNotFound.
+  ///
+  /// In en, this message translates to:
+  /// **'Bridge not found on this network'**
+  String get bridgeNotFound;
+
+  /// No description provided for @connect.
+  ///
+  /// In en, this message translates to:
+  /// **'Connect'**
+  String get connect;
+
+  /// No description provided for @connecting.
+  ///
+  /// In en, this message translates to:
+  /// **'Connecting...'**
+  String get connecting;
+
+  /// No description provided for @connectionFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Connection failed'**
+  String get connectionFailed;
+
+  /// No description provided for @enterBridgeAddress.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the bridge address'**
+  String get enterBridgeAddress;
 }
 
 class _AppLocalizationsDelegate

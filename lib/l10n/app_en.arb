@@ -101,5 +101,19 @@
   "mosLock": "MOS Lock",
   "overTemperature": "over temperature",
   "sensorFault": "sensor fault",
-  "noReading": "no reading"
+  "noReading": "no reading",
+  "bluetooth": "Bluetooth",
+  "wifi": "WiFi",
+  "wifiBridge": "KQBMS WiFi Bridge",
+  "wifiBridgeSubtitle": "Connect to your BMS through the ESP32 bridge",
+  "bridgeAddress": "Bridge Address",
+  "bridgeAddressHint": "kqbms-bridge.local or IP",
+  "portLabel": "Port",
+  "autoDiscover": "Auto Discover",
+  "bridgeFound": "Bridge found",
+  "bridgeNotFound": "Bridge not found on this network",
+  "connect": "Connect",
+  "connecting": "Connecting...",
+  "connectionFailed": "Connection failed",
+  "enterBridgeAddress": "Enter the bridge address"
 }

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/bms_provider.dart';
 import '../../providers/settings_provider.dart';
+import '../../models/bms_data.dart';
 import '../../l10n/app_localizations.dart';
 import 'detail_screen.dart';
 import 'settings_screen.dart';
@@ -94,7 +95,7 @@ class DashboardScreen extends StatelessWidget {
                                   ),
                                   const SizedBox(height: 2),
                                   Text(
-                                    provider.device?.platformName ?? "BMS",
+                                    provider.deviceName,
                                     style: AppTheme.title2Style(context),
                                   ),
                                   if (provider.hardwareVersion != null)
@@ -272,7 +273,7 @@ class DashboardScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildHeroSoc(BuildContext context, dynamic info, bool isDark, AppLocalizations l10n) {
+  Widget _buildHeroSoc(BuildContext context, BmsBaseInfo? info, bool isDark, AppLocalizations l10n) {
     return GlassContainer(
       padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 20),
       child: Column(
@@ -373,7 +374,7 @@ class DashboardScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildQuickInfoRow(BuildContext context, dynamic info, SettingsProvider settings, AppLocalizations l10n) {
+  Widget _buildQuickInfoRow(BuildContext context, BmsBaseInfo? info, SettingsProvider settings, AppLocalizations l10n) {
     return Row(
       children: [
         Expanded(
@@ -443,7 +444,7 @@ class DashboardScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildPowerFlow(BuildContext context, dynamic info, AppLocalizations l10n) {
+  Widget _buildPowerFlow(BuildContext context, BmsBaseInfo? info, AppLocalizations l10n) {
     final double power = info != null ? (info.totalVoltage * info.current).abs() : 0;
     final bool isCharging = info != null && info.current > 0.05;
     final bool isDischarging = info != null && info.current < -0.05;
@@ -553,7 +554,7 @@ class DashboardScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildSocTime(BuildContext context, dynamic info, AppLocalizations l10n) {
+  Widget _buildSocTime(BuildContext context, BmsBaseInfo? info, AppLocalizations l10n) {
     if (info == null || info.current == 0) return const SizedBox.shrink();
     double hours;
     bool isCharging = info.current > 0;

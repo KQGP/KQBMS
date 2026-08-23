@@ -1,6 +1,5 @@
 // ignore_for_file: constant_identifier_names
 
-import 'package:flutter/foundation.dart';
 import 'crc_utils.dart';
 
 class BmsProtocol {
@@ -63,8 +62,7 @@ class BmsProtocol {
     if (packet[0] == HEADER) {
       if (packet.length >= 7) {
         int len = packet[3];
-        int expectedLen =
-            len + 7;
+        int expectedLen = len + 7;
 
         if (packet.length >= expectedLen && packet[expectedLen - 1] == TAIL) {
           return _parseStandardPacket(packet.sublist(0, expectedLen));

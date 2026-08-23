@@ -4,14 +4,38 @@ import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import '../models/bms_data.dart';
 import '../protocol/bms_protocol.dart';
 import '../services/ble_service.dart';
+import '../services/bms_transport.dart';
+import '../services/tcp_service.dart';
 import 'settings_provider.dart';
 
 class BmsProvider extends ChangeNotifier {
   final BleService _bleService = BleService();
+  final TcpService _tcpService = TcpService();
   SettingsProvider? _settingsProvider;
 
+  bool _useWifi = false;
+
+  BmsTransport get _transport => _useWifi ? _tcpService : _bleService;
+
+  String get transportMode => _useWifi ? 'wifi' : 'ble';
+
+  String get deviceName {
+    if (_useWifi) {
+      final host = _settingsProvider?.wifiHost;
+      return (host == null || host.isEmpty)
+          ? SettingsProvider.defaultWifiHost
+          : host;
+    }
+    return _device?.platformName ?? "BMS";
+  }
+
   void updateSettings(SettingsProvider settings) {
+    final previousInterval = _settingsProvider?.refreshIntervalMs;
     _settingsProvider = settings;
+    if (previousInterval != null &&
+        settings.refreshIntervalMs != previousInterval) {
+      _restartPollingTimer();
+    }
   }
 
   BluetoothDevice? _device;
@@ -25,6 +49,9 @@ class BmsProvider extends ChangeNotifier {
   List<ScanResult> _scanResults = [];
 
   Timer? _pollingTimer;
+  Timer? _wifiReconnectTimer;
+  int _wifiReconnectAttempts = 0;
+  static const int _maxWifiReconnectAttempts = 5;
   StreamSubscription? _responseSubscription;
   StreamSubscription? _authSubscription;
   StreamSubscription? _scanResultsSubscription;
@@ -78,6 +105,17 @@ class BmsProvider extends ChangeNotifier {
 
   Future<bool> autoConnect(String deviceId) async {
     if (kIsWeb) return false;
+    if (_settingsProvider?.transportMode == 'wifi') {
+      try {
+        await connectToWifi();
+        for (int i = 0; i < 20 && !_isAuthenticated; i++) {
+          await Future.delayed(const Duration(milliseconds: 100));
+        }
+        return _isConnected && _isAuthenticated;
+      } catch (e) {
+        return false;
+      }
+    }
     try {
       await _bleService.ensureBluetoothOn();
       
@@ -170,14 +208,59 @@ class BmsProvider extends ChangeNotifier {
     }
   }
 
+  Future<void> connectToWifi({String? host, int? port}) async {
+    _useWifi = true;
+    _device = null;
+    _isConnected = true;
+    _isAuthenticated = false;
+    _chargeEnabled = false;
+    _dischargeEnabled = false;
+    _toggleStateInitialized = false;
+    _lastMosWriteAt = null;
+
+    _startListening();
+    _startAuthListening();
+    _startDisconnectListener();
+
+    try {
+      final resolvedHost = (host != null && host.trim().isNotEmpty)
+          ? host.trim()
+          : (_settingsProvider?.wifiHost ?? SettingsProvider.defaultWifiHost);
+      final resolvedPort =
+          port ?? _settingsProvider?.wifiPort ?? SettingsProvider.defaultWifiPort;
+
+      _tcpService.configure(host: resolvedHost, port: resolvedPort);
+      await _tcpService.connect();
+      _wifiReconnectAttempts = 0;
+
+      await _settingsProvider?.setWifiHost(resolvedHost);
+      await _settingsProvider?.setWifiPort(resolvedPort);
+      await _settingsProvider?.setTransportMode('wifi');
+
+      notifyListeners();
+    } catch (e) {
+      await _tcpService.disconnect().catchError((_) {});
+      _isConnected = false;
+      _isAuthenticated = false;
+      notifyListeners();
+      rethrow;
+    }
+  }
+
+  Future<MapEntry<String, int>?> discoverBridge() =>
+      _tcpService.discoverBridge();
+
   Future<void> disconnect() async {
     _stopPolling();
+    _wifiReconnectTimer?.cancel();
+    _wifiReconnectTimer = null;
+    _wifiReconnectAttempts = 0;
     await _responseSubscription?.cancel();
     await _authSubscription?.cancel();
     await _scanResultsSubscription?.cancel();
     await _isScanningSubscription?.cancel();
     await _disconnectSubscription?.cancel();
-    await _bleService.disconnect();
+    await _transport.disconnect();
     _device = null;
     _isConnected = false;
     _isAuthenticated = false;
@@ -193,7 +276,8 @@ class BmsProvider extends ChangeNotifier {
   }
 
   void _startListening() {
-    _responseSubscription = _bleService.responseStream.listen((data) {
+    _responseSubscription?.cancel();
+    _responseSubscription = _transport.responseStream.listen((data) {
       try {
         final packet = BmsProtocol.parseResponse(data);
         final cmd = packet['command'];
@@ -252,13 +336,15 @@ class BmsProvider extends ChangeNotifier {
           }
         }
         notifyListeners();
-      } catch (e) {
+      } catch (_) {
+        return;
       }
     });
   }
 
   void _startAuthListening() {
-    _authSubscription = _bleService.authStatusStream.listen((isAuth) {
+    _authSubscription?.cancel();
+    _authSubscription = _transport.authStatusStream.listen((isAuth) {
       _isAuthenticated = isAuth;
       if (isAuth) {
         _startPolling();
@@ -267,22 +353,39 @@ class BmsProvider extends ChangeNotifier {
     });
   }
 
+  bool _pollBusy = false;
+
   void _startPolling() {
-    _pollingTimer?.cancel();
     _pendingExtOffset = null;
 
-    _requestInitialData();
+    unawaited(_requestInitialData());
 
-    Future.delayed(const Duration(milliseconds: 1000), () {
+    unawaited(Future.delayed(const Duration(milliseconds: 1000), () {
       if (_isConnected && _isAuthenticated) {
         _requestDeviceInfo();
       }
-    });
+    }));
 
+    _restartPollingTimer();
+  }
+
+  void _restartPollingTimer() {
+    if (!_isConnected || !_isAuthenticated) return;
     final intervalMs = _settingsProvider?.refreshIntervalMs ?? 5000;
-    _pollingTimer = Timer.periodic(Duration(milliseconds: intervalMs), (timer) async {
-      await _requestInitialData();
+    _pollingTimer?.cancel();
+    _pollingTimer = Timer.periodic(Duration(milliseconds: intervalMs), (_) {
+      unawaited(_pollTick());
     });
+  }
+
+  Future<void> _pollTick() async {
+    if (_pollBusy) return;
+    _pollBusy = true;
+    try {
+      await _requestInitialData();
+    } finally {
+      _pollBusy = false;
+    }
   }
 
   void _stopPolling() {
@@ -292,74 +395,97 @@ class BmsProvider extends ChangeNotifier {
 
   void _startDisconnectListener() {
     _disconnectSubscription?.cancel();
-    _disconnectSubscription = _bleService.disconnectStream.listen((_) {
+    _disconnectSubscription = _transport.disconnectStream.listen((_) {
       if (_isConnected) {
         _isConnected = false;
         _isAuthenticated = false;
         notifyListeners();
+        _scheduleWifiReconnect();
+      }
+    });
+  }
+
+  void _scheduleWifiReconnect() {
+    if (!_useWifi) return;
+    if (!(_settingsProvider?.autoReconnect ?? false)) return;
+    if (_wifiReconnectTimer != null) return;
+    if (_wifiReconnectAttempts >= _maxWifiReconnectAttempts) return;
+
+    final delay = Duration(seconds: 2 * (_wifiReconnectAttempts + 1));
+    _wifiReconnectAttempts++;
+    _wifiReconnectTimer = Timer(delay, () async {
+      _wifiReconnectTimer = null;
+      if (_isConnected || !_useWifi) return;
+      try {
+        await connectToWifi();
+        _wifiReconnectAttempts = 0;
+      } catch (_) {
+        _scheduleWifiReconnect();
       }
     });
   }
 
   Future<void> _requestInitialData() async {
     try {
-      await _bleService.write(BmsProtocol.createReadPacket(
+      await _transport.write(BmsProtocol.createReadPacket(
         BmsProtocol.CMD_READ_BASE_INFO,
       ));
       await Future.delayed(const Duration(milliseconds: 150));
 
-      await _bleService.write(BmsProtocol.createReadPacket(
+      await _transport.write(BmsProtocol.createReadPacket(
         BmsProtocol.CMD_READ_CELL_VOLTAGES,
       ));
       await Future.delayed(const Duration(milliseconds: 150));
 
-      await _bleService.write(BmsProtocol.createReadPacket(
+      await _transport.write(BmsProtocol.createReadPacket(
         BmsProtocol.CMD_READ_HARDWARE_VERSION,
       ));
-    } catch (e) {
+    } catch (_) {
+      return;
     }
   }
 
   Future<void> _requestDeviceInfo() async {
     try {
       await Future.delayed(const Duration(milliseconds: 200));
-      await _bleService.write(BmsProtocol.createFactoryModeOpenPacket());
+      await _transport.write(BmsProtocol.createFactoryModeOpenPacket());
       await Future.delayed(const Duration(milliseconds: 100));
 
       _pendingExtOffset = 117;
-      await _bleService.write(BmsProtocol.createExtendedReadPacket(117, 8));
+      await _transport.write(BmsProtocol.createExtendedReadPacket(117, 8));
       await Future.delayed(const Duration(milliseconds: 100));
 
       _pendingExtOffset = 170;
-      await _bleService.write(BmsProtocol.createExtendedReadPacket(170, 6));
+      await _transport.write(BmsProtocol.createExtendedReadPacket(170, 6));
       await Future.delayed(const Duration(milliseconds: 100));
 
       _pendingExtOffset = 176;
-      await _bleService.write(BmsProtocol.createExtendedReadPacket(176, 8));
+      await _transport.write(BmsProtocol.createExtendedReadPacket(176, 8));
       await Future.delayed(const Duration(milliseconds: 100));
 
-      await _bleService.write(
+      await _transport.write(
         BmsProtocol.createReadPacket(BmsProtocol.CMD_SERIAL_NUMBER),
       );
       await Future.delayed(const Duration(milliseconds: 100));
 
-      await _bleService.write(
+      await _transport.write(
         BmsProtocol.createReadPacket(BmsProtocol.CMD_BARCODE),
       );
       await Future.delayed(const Duration(milliseconds: 100));
 
-      await _bleService.write(
+      await _transport.write(
         BmsProtocol.createReadPacket(BmsProtocol.CMD_MANUFACTURER),
       );
       await Future.delayed(const Duration(milliseconds: 100));
 
-      await _bleService.write(
+      await _transport.write(
         BmsProtocol.createReadPacket(BmsProtocol.CMD_BATTERY_MODEL),
       );
       await Future.delayed(const Duration(milliseconds: 100));
 
-      await _bleService.write(BmsProtocol.createFactoryModeClosePacket());
-    } catch (e) {
+      await _transport.write(BmsProtocol.createFactoryModeClosePacket());
+    } catch (_) {
+      return;
     }
   }
 
@@ -450,7 +576,7 @@ class BmsProvider extends ChangeNotifier {
   Future<void> sendMosControl(int controlValue) async {
     try {
       final mosPacket = BmsProtocol.createMosControlPacket(controlValue);
-      await _bleService.write(mosPacket);
+      await _transport.write(mosPacket);
     } catch (e) {
       rethrow;
     }
@@ -461,29 +587,7 @@ class BmsProvider extends ChangeNotifier {
       final packet = BmsProtocol.createReadPacket(
         BmsProtocol.CMD_READ_BASE_INFO,
       );
-      await _bleService.write(packet);
-    } catch (e) {
-      rethrow;
-    }
-  }
-
-  Future<void> requestCellVoltages() async {
-    try {
-      final packet = BmsProtocol.createReadPacket(
-        BmsProtocol.CMD_READ_CELL_VOLTAGES,
-      );
-      await _bleService.write(packet);
-    } catch (e) {
-      rethrow;
-    }
-  }
-
-  Future<void> requestHardwareVersion() async {
-    try {
-      final packet = BmsProtocol.createReadPacket(
-        BmsProtocol.CMD_READ_HARDWARE_VERSION,
-      );
-      await _bleService.write(packet);
+      await _transport.write(packet);
     } catch (e) {
       rethrow;
     }

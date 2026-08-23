@@ -49,8 +49,6 @@ class _SplashScreenState extends State<SplashScreen>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _initAppFlow();
     });
-
-    _controller.forward();
   }
 
   Future<void> _initAppFlow() async {
@@ -59,18 +57,24 @@ class _SplashScreenState extends State<SplashScreen>
 
     await settingsProvider.load();
 
-    await bmsProvider.initializeBluetooth();
+    final useWifi = settingsProvider.transportMode == 'wifi';
+
+    if (!useWifi) {
+      await bmsProvider.initializeBluetooth();
+    }
 
     final lastId = settingsProvider.lastDeviceId;
     bool autoConnected = false;
 
-    if (lastId != null && settingsProvider.autoReconnect) {
-      autoConnected = await bmsProvider.autoConnect(lastId);
+    if ((lastId != null || useWifi) && settingsProvider.autoReconnect) {
+      autoConnected = await bmsProvider.autoConnect(lastId ?? '');
     }
 
     if (!mounted) return;
 
     await Future.delayed(const Duration(milliseconds: 1000));
+
+    if (!mounted) return;
 
     if (autoConnected) {
       Navigator.pushReplacement(

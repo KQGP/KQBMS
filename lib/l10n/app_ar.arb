@@ -95,5 +95,19 @@
   "mosLock": "قفل MOS",
   "overTemperature": "حرارة زائدة",
   "sensorFault": "عطل في الحساس",
-  "noReading": "لا توجد قراءة"
+  "noReading": "لا توجد قراءة",
+  "bluetooth": "بلوتوث",
+  "wifi": "واي فاي",
+  "wifiBridge": "جسر KQBMS اللاسلكي",
+  "wifiBridgeSubtitle": "اتصل بنظام البطارية عبر جسر ESP32",
+  "bridgeAddress": "عنوان الجسر",
+  "bridgeAddressHint": "kqbms-bridge.local أو عنوان IP",
+  "portLabel": "المنفذ",
+  "autoDiscover": "بحث تلقائي",
+  "bridgeFound": "تم العثور على الجسر",
+  "bridgeNotFound": "لم يتم العثور على الجسر في هذه الشبكة",
+  "connect": "اتصال",
+  "connecting": "جارٍ الاتصال...",
+  "connectionFailed": "فشل الاتصال",
+  "enterBridgeAddress": "أدخل عنوان الجسر"
 }

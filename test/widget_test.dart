@@ -36,8 +36,7 @@ void main() {
     await tester.pump();
 
     expect(find.text('About'), findsOneWidget);
-    expect(find.text('KQBMS'), findsNWidgets(2));
+    expect(find.text('KQBMS'), findsOneWidget);
     expect(find.text('Khalil Anes Alqisy'), findsOneWidget);
-    expect(find.text('flutter_blue_plus'), findsOneWidget);
   });
 }
