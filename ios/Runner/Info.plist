@@ -4,8 +4,14 @@
 	<dict>
 		<key>NSBluetoothAlwaysUsageDescription</key>
 		<string>This app needs Bluetooth to connect to the BMS to read battery data.</string>
-		<key>NSBluetoothPeripheralUsageDescription</key>
-		<string>This app needs Bluetooth to connect to the BMS to read battery data.</string>
+<key>NSBluetoothPeripheralUsageDescription</key>
+	<string>This app needs Bluetooth to connect to the BMS to read battery data.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>This app needs local network access to find and connect to the WiFi bridge to read battery data.</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_kqbms._tcp</string>
+	</array>
 		<key>CFBundleDevelopmentRegion</key>
 		<string>$(DEVELOPMENT_LANGUAGE)</string>
 		<key>CFBundleDisplayName</key>

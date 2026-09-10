@@ -40,6 +40,11 @@ class BleService implements BmsTransport {
 
   Future<bool> requestPermissions() async {
     if (kIsWeb) return true;
+
+    if (defaultTargetPlatform == TargetPlatform.iOS) {
+      return _requestIosPermissions();
+    }
+
     final scanStatus = await Permission.bluetoothScan.status;
     final connectStatus = await Permission.bluetoothConnect.status;
     final locationStatus = await Permission.location.status;
@@ -49,10 +54,10 @@ class BleService implements BmsTransport {
     }
 
     List<Permission> toRequest = [];
-    
+
     if (scanStatus.isDenied) toRequest.add(Permission.bluetoothScan);
     if (connectStatus.isDenied) toRequest.add(Permission.bluetoothConnect);
-    
+
     if (toRequest.isEmpty && locationStatus.isDenied) {
       toRequest.add(Permission.location);
     }
@@ -61,9 +66,17 @@ class BleService implements BmsTransport {
       return true;
     }
 
-    Map<Permission, PermissionStatus> statuses = await toRequest.request();
+    final statuses = await toRequest.request();
 
     return statuses.values.every((status) => status.isGranted || status.isLimited);
+  }
+
+  Future<bool> _requestIosPermissions() async {
+    final status = await Permission.bluetooth.status;
+    if (status.isGranted || status.isLimited) return true;
+
+    final result = await Permission.bluetooth.request();
+    return result.isGranted || result.isLimited;
   }
 
   Future<void> ensureBluetoothOn() async {
@@ -85,12 +98,8 @@ class BleService implements BmsTransport {
 
   Future<void> startScan() async {
     if (!kIsWeb) {
-      final scanStatus = await Permission.bluetoothScan.status;
-      final connectStatus = await Permission.bluetoothConnect.status;
-      if (!scanStatus.isGranted || !connectStatus.isGranted) {
-        final granted = await requestPermissions();
-        if (!granted) return;
-      }
+      final granted = await requestPermissions();
+      if (!granted) return;
 
       await ensureBluetoothOn();
 
