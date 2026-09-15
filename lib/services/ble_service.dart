@@ -23,8 +23,20 @@ class BleService implements BmsTransport {
   final String rxCharUuid = "0000ff01-0000-1000-8000-00805f9b34fb";
   final String txCharUuid = "0000ff02-0000-1000-8000-00805f9b34fb";
 
-  Stream<List<ScanResult>> get scanResults => FlutterBluePlus.scanResults;
+  Stream<List<ScanResult>> get scanResults => FlutterBluePlus.scanResults
+      .map((results) => results.where(_isBmsDevice).toList());
   Stream<bool> get isScanning => FlutterBluePlus.isScanning;
+
+  bool _isBmsDevice(ScanResult result) {
+    final ad = result.advertisementData;
+    final matchesUuid = ad.serviceUuids.any(
+      (g) => g.str128.startsWith('0000ff00'),
+    );
+    if (matchesUuid) return true;
+    return ad.serviceData.keys.any(
+      (g) => g.str128.startsWith('0000ff00'),
+    );
+  }
 
   final _dataController = StreamController<List<int>>.broadcast();
   @override
